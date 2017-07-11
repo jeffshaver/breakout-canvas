@@ -10,6 +10,8 @@ const MARGIN = 20
 const DAMPENER = 0.25
 const MAX_X_VELOCITY = 12
 const MIN_X_VELOCITY = 2
+const BACKGROUND_COLOR = '#2b2b2b'
+const FOREGROUND_COLOR = '#35ac9d'
 
 let ballX = canvas.width / 2
 let ballY = canvas.height / 2
@@ -30,6 +32,7 @@ document.addEventListener('mousemove', event => {
 canvas.addEventListener('click', _ => {
   if (lives === 0) {
     lives = 3
+    generateInitialBlocks()
   }
 
   paused = !paused
@@ -64,21 +67,21 @@ function draw() {
 
 function drawBackground() {
   context.save()
-  context.fillStyle = 'black'
+  context.fillStyle = BACKGROUND_COLOR
   context.fillRect(0, 0, canvas.width, canvas.height)
   context.restore()
 }
 
 function drawLives() {
   context.save()
-  context.fillStyle = 'white'
+  context.fillStyle = FOREGROUND_COLOR
   context.fillText('Lives: ' + lives, 20, 12.5)
   context.restore()
 }
 
 function drawPausedScreen() {
   context.save()
-  context.fillStyle = 'white'
+  context.fillStyle = FOREGROUND_COLOR
   context.textAlign = 'center'
 
   if (lives !== 0 && blocks.length !== 0) {
@@ -97,7 +100,7 @@ function drawPausedScreen() {
 
 function drawPlayer() {
   context.save()
-  context.fillStyle = 'white'
+  context.fillStyle = FOREGROUND_COLOR
   context.fillRect(
     playerX,
     canvas.height - (BLOCK_HEIGHT + MARGIN),
@@ -109,7 +112,7 @@ function drawPlayer() {
 
 function drawBlocks() {
   context.save()
-  context.fillStyle = 'white'
+  context.fillStyle = FOREGROUND_COLOR
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i]
@@ -130,9 +133,7 @@ function drawBlockExplosions() {
 
     const opacity = blockExplosion.draws / 10
 
-    console.log(opacity)
-
-    context.fillStyle = `rgba(255, 255, 255, ${opacity})`
+    context.fillStyle = `rgba(53, 172, 157, ${opacity})`
 
     context.fillRect(
       blockExplosion.x,
@@ -148,7 +149,7 @@ function drawBlockExplosions() {
 
 function drawBall() {
   context.save()
-  context.fillStyle = 'white'
+  context.fillStyle = FOREGROUND_COLOR
   context.beginPath()
   context.arc(ballX, ballY, BALL_RADIUS, 0, Math.PI * 2, false)
   context.closePath()
@@ -164,7 +165,10 @@ function move() {
   ballX += velocityX
   ballY += velocityY
 
-  if (ballX > canvas.width || ballX < 0) {
+  if (
+    (ballX > canvas.width && Math.sign(velocityX) === 1) ||
+    (ballX < 0 && Math.sign(velocityX) === -1)
+  ) {
     velocityX = -velocityX
   }
 
@@ -194,6 +198,7 @@ function move() {
   }
 
   const collidedWithBlock = checkBlockCollision()
+  const velocityYSign = checkBlockCollisionLocation(blocks[collidedWithBlock])
 
   if (collidedWithBlock !== -1) {
     const deltaX =
@@ -206,7 +211,7 @@ function move() {
     blockExplosions.push(b)
 
     velocityX = deltaX * DAMPENER
-    velocityY = -velocityY
+    velocityY = velocityYSign * Math.abs(velocityY)
 
     enforceXVelocity()
   }
@@ -218,6 +223,8 @@ function generateInitialBlocks() {
   const numberOfRows = 4
   const margin =
     (canvas.width - (blockWidth * numberOfBlocks - BLOCK_MARGIN)) / 2
+
+  blocks = []
 
   for (let y = 0; y < numberOfRows; y++) {
     for (let x = 0; x < numberOfBlocks; x++) {
@@ -265,12 +272,22 @@ function checkBlockCollision() {
   })
 }
 
+function checkBlockCollisionLocation(block) {
+  if (!block) {
+    return -1
+  }
+
+  const topHalfOfBlockStart = block.y + BLOCK_HEIGHT / 2
+
+  return ballY <= topHalfOfBlockStart ? -1 : 1
+}
+
 function checkBottomEdgeCollision() {
-  return ballY + BALL_RADIUS >= canvas.height
+  return ballY + BALL_RADIUS >= canvas.height && Math.sign(velocityY) === 1
 }
 
 function checkTopEdgeCollision() {
-  return ballY - BALL_RADIUS <= 0
+  return ballY - BALL_RADIUS <= 0 && Math.sign(velocityY) === -1
 }
 
 function enforceXVelocity() {
