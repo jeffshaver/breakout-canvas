@@ -7,18 +7,32 @@ const BLOCK_HEIGHT = 15
 const BLOCK_WIDTH = 100
 const BLOCK_MARGIN = 10
 const MARGIN = 20
+const DAMPENER = 0.25
+const MAX_X_VELOCITY = 12
+const MIN_X_VELOCITY = 2
 
 let ballX = canvas.width / 2
 let ballY = canvas.height / 2
 let blocks = []
+let blockExplosions = []
 let playerX = canvas.width / 2
 let velocityX = 2
 let velocityY = 4
+let lives = 3
+let paused = false
 
 document.addEventListener('mousemove', event => {
   const { x } = calculateMousePosition(event)
 
   playerX = x - BLOCK_WIDTH / 2
+})
+
+canvas.addEventListener('click', _ => {
+  if (lives === 0) {
+    lives = 3
+  }
+
+  paused = !paused
 })
 
 generateInitialBlocks()
@@ -31,19 +45,58 @@ setInterval(() => {
 function draw() {
   drawBackground()
 
+  if (paused) {
+    drawPausedScreen()
+
+    return
+  }
+
+  drawLives()
+
   drawPlayer()
 
   drawBlocks()
+
+  drawBlockExplosions()
 
   drawBall()
 }
 
 function drawBackground() {
+  context.save()
   context.fillStyle = 'black'
   context.fillRect(0, 0, canvas.width, canvas.height)
+  context.restore()
+}
+
+function drawLives() {
+  context.save()
+  context.fillStyle = 'white'
+  context.fillText('Lives: ' + lives, 20, 12.5)
+  context.restore()
+}
+
+function drawPausedScreen() {
+  context.save()
+  context.fillStyle = 'white'
+  context.textAlign = 'center'
+
+  if (lives !== 0 && blocks.length !== 0) {
+    context.fillText('Click to resume', canvas.width / 2, canvas.height / 2)
+
+    return
+  }
+
+  context.fillText(
+    'Player Lost; Click to restart',
+    canvas.width / 2,
+    canvas.height / 2
+  )
+  context.restore()
 }
 
 function drawPlayer() {
+  context.save()
   context.fillStyle = 'white'
   context.fillRect(
     playerX,
@@ -51,9 +104,11 @@ function drawPlayer() {
     BLOCK_WIDTH,
     BLOCK_HEIGHT
   )
+  context.restore()
 }
 
 function drawBlocks() {
+  context.save()
   context.fillStyle = 'white'
 
   for (let i = 0; i < blocks.length; i++) {
@@ -61,17 +116,51 @@ function drawBlocks() {
 
     context.fillRect(block.x, block.y, BLOCK_WIDTH, BLOCK_HEIGHT)
   }
+  context.restore()
+}
+
+function drawBlockExplosions() {
+  context.save()
+  for (let i = 0; i < blockExplosions.length; i++) {
+    const blockExplosion = blockExplosions[i]
+
+    if (blockExplosion.draws === 0) {
+      blockExplosions.splice(i, 1)
+    }
+
+    const opacity = blockExplosion.draws / 10
+
+    console.log(opacity)
+
+    context.fillStyle = `rgba(255, 255, 255, ${opacity})`
+
+    context.fillRect(
+      blockExplosion.x,
+      blockExplosion.y,
+      BLOCK_WIDTH,
+      BLOCK_HEIGHT
+    )
+
+    blockExplosion.draws--
+  }
+  context.restore()
 }
 
 function drawBall() {
+  context.save()
   context.fillStyle = 'white'
   context.beginPath()
   context.arc(ballX, ballY, BALL_RADIUS, 0, Math.PI * 2, false)
   context.closePath()
   context.fill()
+  context.restore()
 }
 
 function move() {
+  if (paused) {
+    return
+  }
+
   ballX += velocityX
   ballY += velocityY
 
@@ -79,20 +168,47 @@ function move() {
     velocityX = -velocityX
   }
 
+  const collidedWithTopEdge = checkTopEdgeCollision()
+
+  if (collidedWithTopEdge) {
+    velocityY = -velocityY
+  }
+
+  const collidedWithBottomEdge = checkBottomEdgeCollision()
+
+  if (collidedWithBottomEdge) {
+    lives = lives - 1
+
+    resetBall()
+  }
+
   const collidedWithPlayer = checkPlayerCollision()
 
   if (collidedWithPlayer) {
-    let deltaY = ballX + BALL_RADIUS - (playerX + BLOCK_WIDTH / 2)
+    const deltaX = ballX + BALL_RADIUS - (playerX + BLOCK_WIDTH / 2)
 
-    velocityX = -velocityX
-    velocityY = deltaY * 0.35
+    velocityX = deltaX * DAMPENER
+    velocityY = -velocityY
+
+    enforceXVelocity()
   }
 
   const collidedWithBlock = checkBlockCollision()
 
   if (collidedWithBlock !== -1) {
-    blocks.splice(collidedWithBlock, 1)
+    const deltaX =
+      ballX + BALL_RADIUS - (blocks[collidedWithBlock].x + BLOCK_WIDTH / 2)
+
+    const b = blocks.splice(collidedWithBlock, 1)[0]
+
+    b.draws = 10
+
+    blockExplosions.push(b)
+
+    velocityX = deltaX * DAMPENER
     velocityY = -velocityY
+
+    enforceXVelocity()
   }
 }
 
@@ -113,6 +229,15 @@ function generateInitialBlocks() {
   }
 }
 
+function resetBall() {
+  if (lives === 0) {
+    paused = true
+  }
+
+  ballX = canvas.width / 2
+  ballY = canvas.height / 2
+}
+
 function calculateMousePosition(event) {
   const rect = canvas.getBoundingClientRect()
   const root = document.documentElement
@@ -131,14 +256,29 @@ function checkPlayerCollision() {
 }
 
 function checkBlockCollision() {
-  const b = blocks.findIndex(block => {
-    console.log(ballX - BALL_RADIUS, block.x)
+  return blocks.findIndex(block => {
     return (
       ballX <= block.x + BLOCK_WIDTH + BALL_RADIUS &&
       ballX >= block.x - BALL_RADIUS &&
-      ballY - BALL_RADIUS <= block.y + BLOCK_HEIGHT / 2
+      ballY - BALL_RADIUS <= block.y + BLOCK_HEIGHT
     )
   })
+}
 
-  return b
+function checkBottomEdgeCollision() {
+  return ballY + BALL_RADIUS >= canvas.height
+}
+
+function checkTopEdgeCollision() {
+  return ballY - BALL_RADIUS <= 0
+}
+
+function enforceXVelocity() {
+  if (Math.abs(velocityX) > MAX_X_VELOCITY) {
+    velocityX = Math.sign(velocityX) * MAX_X_VELOCITY
+  }
+
+  if (Math.abs(velocityX) < MIN_X_VELOCITY) {
+    velocityX = Math.sign(velocityX) * MIN_X_VELOCITY
+  }
 }
