@@ -1,6 +1,8 @@
 const canvas = document.querySelector('canvas')
 const context = canvas.getContext('2d')
 
+context.font = '10px Arial'
+
 const FPS = 60
 const BALL_RADIUS = 10
 const BLOCK_HEIGHT = 15
@@ -12,6 +14,7 @@ const MAX_X_VELOCITY = 12
 const MIN_X_VELOCITY = 2
 const BACKGROUND_COLOR = '#2b2b2b'
 const FOREGROUND_COLOR = '#35ac9d'
+const MAX_TRAIL_LENGTH = 10
 
 let ballX = canvas.width / 2
 let ballY = canvas.height / 2
@@ -22,8 +25,13 @@ let velocityX = 2
 let velocityY = 4
 let lives = 3
 let paused = false
+let trail = []
 
 document.addEventListener('mousemove', event => {
+  if (paused) {
+    return
+  }
+
   const { x } = calculateMousePosition(event)
 
   playerX = x - BLOCK_WIDTH / 2
@@ -41,18 +49,15 @@ canvas.addEventListener('click', _ => {
 generateInitialBlocks()
 
 setInterval(() => {
-  move()
+  if (!paused) {
+    move()
+  }
+
   draw()
 }, 1000 / FPS)
 
 function draw() {
   drawBackground()
-
-  if (paused) {
-    drawPausedScreen()
-
-    return
-  }
 
   drawLives()
 
@@ -63,6 +68,12 @@ function draw() {
   drawBlockExplosions()
 
   drawBall()
+
+  drawTrail()
+
+  if (paused) {
+    drawPausedScreen()
+  }
 }
 
 function drawBackground() {
@@ -76,25 +87,6 @@ function drawLives() {
   context.save()
   context.fillStyle = FOREGROUND_COLOR
   context.fillText('Lives: ' + lives, 20, 12.5)
-  context.restore()
-}
-
-function drawPausedScreen() {
-  context.save()
-  context.fillStyle = FOREGROUND_COLOR
-  context.textAlign = 'center'
-
-  if (lives !== 0 && blocks.length !== 0) {
-    context.fillText('Click to resume', canvas.width / 2, canvas.height / 2)
-
-    return
-  }
-
-  context.fillText(
-    'Player Lost; Click to restart',
-    canvas.width / 2,
-    canvas.height / 2
-  )
   context.restore()
 }
 
@@ -157,13 +149,64 @@ function drawBall() {
   context.restore()
 }
 
+function drawTrail() {
+  context.save()
+
+  for (let i = 0; i < trail.length; i++) {
+    const opacity = 6 / (i + 1) / 10
+
+    context.fillStyle = `rgba(53, 172, 157, ${opacity})`
+    context.beginPath()
+    context.arc(trail[i].x, trail[i].y, BALL_RADIUS, 0, Math.PI * 2, false)
+    context.closePath()
+    context.fill()
+  }
+  context.restore()
+}
+
+function drawPausedScreen() {
+  context.save()
+
+  context.textAlign = 'center'
+  context.font = '30px Arial'
+
+  if (lives !== 0 && blocks.length !== 0) {
+    context.fillStyle = 'rgba(0, 0, 0, .9)'
+    context.fillRect(canvas.width / 2 - 125, canvas.height / 2 - 35, 250, 50)
+
+    context.fillStyle = FOREGROUND_COLOR
+    context.fillText('Click to resume', canvas.width / 2, canvas.height / 2)
+  } else {
+    context.fillStyle = 'rgba(0, 0, 0, .9)'
+    context.fillRect(canvas.width / 2 - 200, canvas.height / 2 - 35, 400, 50)
+
+    context.fillStyle = FOREGROUND_COLOR
+    context.fillText(
+      'Player Lost; Click to restart',
+      canvas.width / 2,
+      canvas.height / 2
+    )
+  }
+
+  context.restore()
+}
+
 function move() {
   if (paused) {
     return
   }
 
+  trail.unshift({
+    x: ballX,
+    y: ballY
+  })
+
   ballX += velocityX
   ballY += velocityY
+
+  while (trail.length > MAX_TRAIL_LENGTH) {
+    trail.pop()
+  }
 
   if (
     (ballX > canvas.width && Math.sign(velocityX) === 1) ||
@@ -243,6 +286,8 @@ function resetBall() {
 
   ballX = canvas.width / 2
   ballY = canvas.height / 2
+
+  trail = []
 }
 
 function calculateMousePosition(event) {
