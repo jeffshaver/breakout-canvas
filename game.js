@@ -1,8 +1,6 @@
 const canvas = document.querySelector('canvas')
 const context = canvas.getContext('2d')
 
-context.font = '10px Arial'
-
 const FPS = 60
 const BALL_RADIUS = 10
 const BLOCK_HEIGHT = 15
@@ -15,6 +13,7 @@ const MIN_X_VELOCITY = 2
 const BACKGROUND_COLOR = '#2b2b2b'
 const FOREGROUND_COLOR = '#35ac9d'
 const MAX_TRAIL_LENGTH = 10
+const PLAYER_Y = canvas.height - (BLOCK_HEIGHT + MARGIN)
 
 let ballX = canvas.width / 2
 let ballY = canvas.height / 2
@@ -85,6 +84,7 @@ function drawBackground() {
 
 function drawLives() {
   context.save()
+  context.font = '10px Arial'
   context.fillStyle = FOREGROUND_COLOR
   context.fillText('Lives: ' + lives, 20, 12.5)
   context.restore()
@@ -93,12 +93,7 @@ function drawLives() {
 function drawPlayer() {
   context.save()
   context.fillStyle = FOREGROUND_COLOR
-  context.fillRect(
-    playerX,
-    canvas.height - (BLOCK_HEIGHT + MARGIN),
-    BLOCK_WIDTH,
-    BLOCK_HEIGHT
-  )
+  context.fillRect(playerX, PLAYER_Y, BLOCK_WIDTH, BLOCK_HEIGHT)
   context.restore()
 }
 
@@ -229,19 +224,22 @@ function move() {
     resetBall()
   }
 
+  let velocityYSign
+
   const collidedWithPlayer = checkPlayerCollision()
+  velocityYSign = checkBlockCollisionLocation({ y: PLAYER_Y })
 
   if (collidedWithPlayer) {
     const deltaX = ballX + BALL_RADIUS - (playerX + BLOCK_WIDTH / 2)
 
     velocityX = deltaX * DAMPENER
-    velocityY = -velocityY
+    velocityY = velocityYSign * Math.abs(velocityY)
 
     enforceXVelocity()
   }
 
   const collidedWithBlock = checkBlockCollision()
-  const velocityYSign = checkBlockCollisionLocation(blocks[collidedWithBlock])
+  velocityYSign = checkBlockCollisionLocation(blocks[collidedWithBlock])
 
   if (collidedWithBlock !== -1) {
     const deltaX =
@@ -281,6 +279,8 @@ function generateInitialBlocks() {
 
 function resetBall() {
   if (lives === 0) {
+    velocityX = 2
+    velocityY = 4
     paused = true
   }
 
